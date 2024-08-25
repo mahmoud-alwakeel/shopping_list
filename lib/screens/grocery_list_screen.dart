@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shopping_list/data/categories.dart';
 import 'package:shopping_list/models/grocery_item_model.dart';
 import 'package:shopping_list/screens/new_item_screen.dart';
+import 'package:http/http.dart' as http;
 
 class GroceryListScreen extends StatefulWidget {
   const GroceryListScreen({super.key});
@@ -10,28 +14,82 @@ class GroceryListScreen extends StatefulWidget {
 }
 
 class _GroceryListScreenState extends State<GroceryListScreen> {
+  List<GroceryItem> _groceryItems = [];
+  var _isLoading = true;
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
 
-  final List<GroceryItem> _groceryItems = [];
+  void _loadItems() async {
+    final url = Uri.https('shopping-list-3dd57-default-rtdb.firebaseio.com',
+        'shopping-list.json');
+    final response = await http.get(url);
+    final Map<String, dynamic> listData =
+        json.decode(response.body);
+    final List<GroceryItem> loadedItems = [];
+    for (final item in listData.entries) {
+      final category = categories.entries
+          .firstWhere((categoryItem) =>
+              categoryItem.value.name == item.value['category'])
+          .value;
+      loadedItems.add(
+        GroceryItem(
+          id: item.key,
+          name: item.value['name'],
+          quantity: item.value['quantity'],
+          category: category,
+        ),
+      );
+    }
+    setState(() {
+      _groceryItems = loadedItems;
+      _isLoading = false;
+    });
+  }
+  
   void _addItem() async {
     final newItem = await Navigator.of(context).push<GroceryItem>(
       MaterialPageRoute(
         builder: (context) => const NewItemScreen(),
       ),
     );
+
     if (newItem == null) {
       return;
     }
-      setState(() {
-        _groceryItems.add(newItem);
-      });
-    
+    setState(() {
+      _groceryItems.add(newItem);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget content = const Center(child: Text("No Items, try adding one.", style: TextStyle(fontSize: 24),),);
-    if (_groceryItems.isNotEmpty) {
-      content = ListView.builder(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Your groceries',
+        ),
+        actions: [
+          IconButton(
+              onPressed: () {
+                _addItem();
+              },
+              icon: const Icon(Icons.add))
+        ],
+      ),
+      body: _isLoading ?  
+      const Center(
+      child: CircularProgressIndicator(),
+      ): _groceryItems.isEmpty ?
+      const Center(
+      child: Text(
+        "No Items, try adding one.",
+        style: TextStyle(fontSize: 24),
+      ),
+    ):
+    ListView.builder(
         itemCount: _groceryItems.length,
         itemBuilder: (context, index) {
           final item = _groceryItems[index];
@@ -60,20 +118,7 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
             ),
           );
         },
-      );
-    }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Your groceries',
-        ),
-        actions: [
-          IconButton(onPressed: (){
-            _addItem();
-          }, icon: const Icon(Icons.add))
-        ],
       ),
-      body: content,
     );
   }
 }
